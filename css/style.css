@@ -1,0 +1,105 @@
+/* ==========================================================
+   Estilos do jogo: tema claro/escuro, HUD, controles de toque
+   e aviso de rotação. Controles de toque são ocultados no PC
+   (classe body.desktop, adicionada por MouseInput).
+   ========================================================== */
+:root{--bg:#dfe8f0;--ui:rgba(0,0,0,.35);--ui2:rgba(0,0,0,.55);--tx:#123}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#10151c;--ui:rgba(255,255,255,.25);--ui2:rgba(255,255,255,.55);--tx:#dde}}
+:root[data-theme="dark"]{--bg:#10151c;--ui:rgba(255,255,255,.25);--ui2:rgba(255,255,255,.55);--tx:#dde}
+html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);touch-action:none;-webkit-user-select:none;user-select:none;font-family:system-ui,sans-serif}
+canvas{display:block;width:100%;height:100%}
+#zoneL,#zoneR{position:fixed;top:0;bottom:0;touch-action:none}
+#zoneL{left:0;width:50%}#zoneR{right:0;width:50%}
+.base{position:fixed;width:120px;height:120px;margin:-60px 0 0 -60px;border-radius:50%;background:var(--ui);border:2px solid var(--ui2);display:none;pointer-events:none}
+.knob{position:absolute;left:35px;top:35px;width:50px;height:50px;border-radius:50%;background:var(--ui2)}
+#hint{position:fixed;left:50%;transform:translateX(-50%);width:max-content;max-width:90vw;top:calc(12px + env(safe-area-inset-top,0px));text-align:center;color:#fff;font-size:12px;letter-spacing:.03em;padding:6px 14px;border-radius:999px;background:rgba(10,14,22,.5);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border:1px solid rgba(255,255,255,.14);opacity:.9;pointer-events:none;transition:opacity .6s}
+#jump{position:fixed;right:calc(32px + env(safe-area-inset-right,0px));bottom:calc(32px + env(safe-area-inset-bottom,0px));width:84px;height:84px;border-radius:50%;background:var(--ui);border:2px solid var(--ui2);color:var(--tx);font:600 14px system-ui,sans-serif;display:flex;align-items:center;justify-content:center;touch-action:none;z-index:5}
+#jump.on{background:var(--ui2)}
+#fire{position:fixed;right:calc(136px + env(safe-area-inset-right,0px));bottom:calc(48px + env(safe-area-inset-bottom,0px));width:84px;height:84px;border-radius:50%;background:rgba(220,70,70,.45);border:2px solid var(--ui2);color:#fff;font:600 13px system-ui,sans-serif;display:flex;align-items:center;justify-content:center;touch-action:none;z-index:5}
+#fire.on{background:rgba(220,70,70,.85)}
+#rot{position:fixed;inset:0;z-index:10;display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px;background:var(--bg);color:var(--tx);text-align:center;font-size:18px;padding:24px}
+#rot svg{width:72px;height:72px;animation:tilt 2s ease-in-out infinite}
+@keyframes tilt{0%,30%{transform:rotate(0)}70%,100%{transform:rotate(-90deg)}}
+@media (orientation: portrait){body:not(.desktop) #rot{display:flex}}
+body.desktop #zoneL,body.desktop #zoneR,body.desktop #jump,body.desktop #fire,body.desktop #crouch,body.desktop #reload,body.desktop #base{display:none!important}
+body.desktop #cross{width:6px;height:6px;margin:-3px;background:#fff;box-shadow:0 0 0 1.5px rgba(0,0,0,.65),0 0 10px rgba(255,255,255,.5)}
+#cross{position:fixed;left:50%;top:50%;width:6px;height:6px;margin:-3px;border-radius:50%;background:var(--ui2);pointer-events:none}
+
+/* ---------- Menu de configurações (features/menu.js) ---------- */
+#gear{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));right:calc(10px + env(safe-area-inset-right,0px));width:42px;height:42px;border-radius:12px;border:1px solid rgba(255,255,255,.22);background:rgba(10,14,22,.5);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);color:#fff;font-size:20px;line-height:1;z-index:8;cursor:pointer;touch-action:manipulation;transition:background .15s,transform .15s}#gear:hover{background:rgba(255,106,43,.55);transform:rotate(30deg)}
+#fps{position:fixed;top:calc(14px + env(safe-area-inset-top,0px));right:calc(62px + env(safe-area-inset-right,0px));display:none;color:#fff;font:700 12px ui-monospace,monospace;background:rgba(10,14,22,.5);border:1px solid rgba(255,255,255,.14);padding:5px 9px;border-radius:8px;pointer-events:none;z-index:8}
+#menu{position:fixed;inset:0;z-index:20;display:none;background:rgba(0,0,0,.25);touch-action:none}
+#menu.open{display:flex}
+#menu .panel{box-sizing:border-box;width:min(420px,94vw);max-height:calc(100% - 16px);margin:8px;padding:14px 16px;overflow-y:auto;touch-action:pan-y;border-radius:14px;background:rgba(15,20,28,.93);color:#eef;font-family:system-ui,sans-serif;padding-left:calc(16px + env(safe-area-inset-left,0px))}
+#menu h2{margin:0 0 10px;font-size:18px}
+#menu .row{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.08)}
+#menu .lbl{flex:1;font-size:14px}
+#menu .val{min-width:96px;text-align:center;font-weight:600;font-size:14px}
+#menu button{font:600 14px system-ui,sans-serif;color:#fff;background:rgba(255,255,255,.14);border:0;border-radius:8px;padding:8px 12px;cursor:pointer}
+#menu button.step{width:40px;height:36px;font-size:20px;padding:0}
+#menu button:disabled{opacity:.3;cursor:default}
+#menu button.primary{background:#d9534f}
+#menu .actions{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
+
+/* ---------- Tela inicial (features/title.js) ---------- */
+body.on-title #gear,body.on-title #cross,body.on-title #hint,body.on-title #jump,body.on-title #fire,body.on-title #crouch,body.on-title #reload,body.on-title #ammo,body.on-title #zoneL,body.on-title #zoneR,body.on-title #base{display:none!important}
+#title{position:fixed;inset:0;z-index:15;display:none;flex-direction:column;align-items:center;justify-content:center;gap:10px;overflow-y:auto;box-sizing:border-box;padding:16px;font-family:system-ui,sans-serif;color:#fff;touch-action:pan-y;background:radial-gradient(ellipse at center,rgba(8,12,20,.30),rgba(8,12,20,.82))}
+#title.open{display:flex}
+#title .tt-main,#title .tt-how{display:flex;flex-direction:column;align-items:center;gap:14px;width:min(420px,92vw)}
+#title .tt-how{display:none;background:rgba(15,20,28,.85);border-radius:14px;padding:16px}
+#title .tt-how h2{margin:0}
+#title .tt-line{display:flex;justify-content:space-between;gap:12px;width:100%;font-size:14px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.1)}
+#title .tt-line span{opacity:.8;text-align:right}
+#title .tt-logo{margin:0;display:flex;align-items:baseline;gap:.35em;font-size:clamp(40px,12vmin,92px);font-weight:900;font-style:italic;letter-spacing:.02em;text-shadow:0 4px 0 #ff6a2b,0 8px 24px rgba(0,0,0,.6);line-height:1}
+#title .tt-logo small{font-size:.38em;color:#ff6a2b;text-shadow:0 2px 8px rgba(0,0,0,.6)}
+#title .tt-btns{display:flex;flex-direction:column;gap:10px;width:100%}
+#title button{font:700 15px system-ui,sans-serif;letter-spacing:.08em;color:#fff;background:rgba(255,255,255,.16);border:2px solid rgba(255,255,255,.35);border-radius:10px;padding:12px 16px;cursor:pointer;touch-action:manipulation}
+#title button:hover{background:rgba(255,255,255,.28)}
+#title button.primary{background:#d9534f;border-color:#ff8a86;font-size:18px;padding:14px 16px}
+#title button.primary:hover{background:#e8645f}
+#title .tt-foot{position:absolute;bottom:calc(10px + env(safe-area-inset-bottom,0px));font-size:12px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;opacity:.75}
+@media (max-height:420px){#title{gap:4px}#title .tt-btns{flex-direction:row;flex-wrap:wrap}#title .tt-btns button{flex:1 1 45%;padding:9px 8px;font-size:13px}#title .tt-btns .primary{flex-basis:100%}}
+
+/* ---------- Multijogador (features/multiplayer.js) ---------- */
+#menu .mp{margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,.15);display:flex;flex-direction:column;gap:8px}
+#menu .mp h3{margin:0;font-size:15px}
+#menu .mp-status{margin:0;font-size:13px;opacity:.85}
+#menu .mp-code{display:flex;align-items:center;gap:8px;font-size:13px}
+#menu .mp-code b{flex:1;font:700 22px ui-monospace,monospace;letter-spacing:.2em;text-align:center;user-select:text;-webkit-user-select:text}
+#menu .mp-join{display:flex;gap:8px}
+#menu .mp-join input{flex:1;min-width:0;box-sizing:border-box;padding:8px 10px;border-radius:8px;border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.1);color:#fff;font:600 14px ui-monospace,monospace;letter-spacing:.1em;text-transform:uppercase;user-select:text;-webkit-user-select:text}
+#mp-hud{position:fixed;top:calc(12px + env(safe-area-inset-top,0px));left:calc(12px + env(safe-area-inset-left,0px));display:none;flex-direction:column;gap:7px;padding:9px 12px;border-radius:12px;background:rgba(10,14,22,.5);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border:1px solid rgba(255,255,255,.14);pointer-events:none;z-index:7}
+body.mp-on #mp-hud{display:flex}
+body.on-title #mp-hud{display:none!important}
+#mp-hud .bar{width:150px;height:9px;border-radius:5px;background:rgba(0,0,0,.45);box-shadow:inset 0 0 0 1px rgba(255,255,255,.18);overflow:hidden}
+#mp-hud .bar i{display:block;height:100%;width:100%;border-radius:5px;box-shadow:inset 0 -3px 4px rgba(0,0,0,.25),inset 0 2px 2px rgba(255,255,255,.3);transition:width .2s,background .2s}
+#mp-hud .score{color:#fff;font:700 11px system-ui,sans-serif;letter-spacing:.04em;text-shadow:0 1px 2px #000}
+#mp-vig{position:fixed;inset:0;pointer-events:none;z-index:7;opacity:0;transition:opacity .3s;box-shadow:inset 0 0 120px 30px rgba(220,30,30,.65)}
+#mp-vig.on{opacity:1;transition:none}
+#mp-dead{position:fixed;inset:0;display:none;align-items:center;justify-content:center;pointer-events:none;z-index:7;background:radial-gradient(ellipse at center,rgba(90,0,0,.35),rgba(60,0,0,.7));color:#fff;font:800 clamp(20px,5vmin,36px) system-ui,sans-serif;letter-spacing:.06em;text-transform:uppercase;text-shadow:0 2px 12px #000}
+#mp-dead.on{display:flex}
+
+/* ---------- Munição, agachar e recarregar (features/ammo.js) ---------- */
+#crouch,#reload{position:fixed;width:64px;height:64px;border-radius:50%;background:var(--ui);border:2px solid var(--ui2);color:var(--tx);font:600 10px system-ui,sans-serif;display:flex;align-items:center;justify-content:center;text-align:center;touch-action:none;z-index:5}
+#crouch{right:calc(40px + env(safe-area-inset-right,0px));bottom:calc(128px + env(safe-area-inset-bottom,0px))}
+#reload{right:calc(150px + env(safe-area-inset-right,0px));bottom:calc(146px + env(safe-area-inset-bottom,0px))}
+#crouch.on,#reload.on{background:var(--ui2)}
+#ammo{position:fixed;left:calc(16px + env(safe-area-inset-left,0px));bottom:calc(14px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:3px;min-width:150px;padding:9px 16px 8px;border-radius:14px;background:rgba(10,14,22,.5);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border:1px solid rgba(255,255,255,.14);border-left:4px solid #ff6a2b;pointer-events:none;z-index:7;color:#fff;font-family:system-ui,sans-serif;text-shadow:0 1px 3px #000}
+#ammo .am-main{display:flex;align-items:baseline;gap:8px}#ammo .am-main small{font:700 10px system-ui,sans-serif;letter-spacing:.14em;opacity:.65;align-self:center;margin-right:2px}#ammo .am-main b{font:900 30px system-ui,sans-serif;line-height:1;letter-spacing:.02em}#ammo .am-main em{font:700 15px system-ui,sans-serif;font-style:normal;opacity:.75}
+#ammo.low{border-left-color:#ff6b5e}#ammo.low .am-main b{color:#ff6b5e}
+#ammo .am-sub{font:600 11px system-ui,sans-serif;opacity:.9;min-height:14px;color:#ffd9b8}
+/* ---------- Fôlego (features/stamina.js) ---------- */
+#stamina{position:fixed;left:calc(16px + env(safe-area-inset-left,0px));bottom:calc(96px + env(safe-area-inset-bottom,0px));display:flex;align-items:center;gap:8px;pointer-events:none;z-index:7;opacity:0;transition:opacity .35s;font:700 12px system-ui,sans-serif;color:#ff8a7d;text-shadow:0 1px 3px #000}
+#stamina.show{opacity:.9}
+body.on-title #stamina{display:none!important}
+#stamina .st-bar{width:150px;height:7px;border-radius:4px;background:rgba(10,14,22,.55);box-shadow:0 0 0 1px rgba(255,255,255,.18);overflow:hidden}
+#stamina .st-bar i{display:block;height:100%;width:100%;border-radius:4px;background:linear-gradient(90deg,#e9f1f8,#fff);transition:background .2s}
+#stamina.low .st-bar i{background:#f0b44c}
+#stamina.tired .st-bar i{background:#ff6b5e;animation:stBlink .7s ease-in-out infinite}
+@keyframes stBlink{50%{opacity:.45}}
+
+/* ---------- Controles configuráveis (menu ⚙ → Controles) ---------- */
+#menu .ctl{margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,.15)}
+#menu .ctl h3{margin:0 0 4px;font-size:15px}
+#menu .ctl .note{margin:8px 0 0;font-size:12px;opacity:.7}
+#menu button.key{min-width:116px}
