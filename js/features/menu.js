@@ -47,7 +47,8 @@
       const fps = h('div'); fps.id = 'fps';
       const root = h('div'); root.id = 'menu';
       const panel = h('div', 'panel'); root.appendChild(panel);
-      panel.appendChild(h('h2', null, 'Configurações'));
+      const head = h('div', 'mhead'), x = h('button', 'mclose', '✕'); x.setAttribute('aria-label', 'Fechar'); x.onclick = () => this.close();
+      head.append(h('h2', null, 'Configurações'), x); panel.appendChild(head); // cabeçalho fixo: o ✕ fica sempre à mão, mesmo rolando o menu no celular
       const rows = h('div', 'rows'); panel.appendChild(rows);
 
       ROWS.forEach(row => {

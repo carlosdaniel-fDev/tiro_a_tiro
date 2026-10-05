@@ -20,8 +20,8 @@
     const L = a => FPS.Settings.keyLabel(FPS.Settings.values.keys[a]);
     return DESKTOP
       ? [[`${L('forward')} ${L('left')} ${L('back')} ${L('right')} / setas`, 'andar'], ['Mouse', 'olhar'], [`Botão esquerdo ou ${L('fire')}`, 'atirar'], [L('jump'), 'pular'],
-         [L('sprint'), 'correr (cansa: o fôlego acaba)'], [L('crouch'), 'agachar (pega munição)'], [`${L('leanL')} / ${L('leanR')}`, 'inclinar para os lados'],, [L('reload'), 'recarregar'], ['M ou Esc', 'configurações (aqui você muda as teclas)']]
-      : [['Analógico (esquerda)', 'andar'], ['Arrastar (direita)', 'olhar'], ['ATIRAR', 'botão vermelho'], ['PULAR', 'botão cinza'], ['AGACHAR', 'toque p/ agachar e pegar munição'], ['RECARREGAR', 'recarrega a arma'], ['⚙', 'configurações · use o celular na horizontal']];
+         [L('sprint'), 'correr (cansa: o fôlego acaba)'], [L('crouch'), 'agachar (pega munição)'], [`${L('leanL')} / ${L('leanR')}`, 'inclinar para os lados'], [L('reload'), 'recarregar'], ['M ou Esc', 'configurações (aqui você muda as teclas)']]
+      : [['Analógico (esquerda)', 'andar'], ['Arrastar (direita)', 'olhar'], ['ATIRAR', 'botão vermelho (arraste nele para mirar)'], ['PULAR', 'botão cinza'], ['CORRER', 'toque e ande (gasta fôlego)'], ['AGACHAR', 'toque p/ agachar e pegar munição'], ['◀ INCL. / INCL. ▶', 'segure para inclinar'], ['RECARREGAR', 'recarrega a arma'], ['⚙', 'configurações · use o celular na horizontal']];
   };
 
   const h = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
@@ -80,6 +80,7 @@
       Model.player.yaw = this.saved.yaw; Model.player.pitch = this.saved.pitch;
       this.ui.root.classList.remove('open');
       bus.emit('title:hide'); // para a música do menu
+      if (!DESKTOP && FPS.OrientationGuard) FPS.OrientationGuard.enter(); // celular: tela cheia + paisagem (o toque em JOGAR vale como gesto)
       if (DESKTOP && lock) { try { const r = $('c').requestPointerLock(); if (r && r.catch) r.catch(() => {}); } catch (_) {} }
     },
 

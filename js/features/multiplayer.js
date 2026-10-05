@@ -1,6 +1,7 @@
 /**
  * FEATURE: Multiplayer — partida em tempo real com VÁRIOS jogadores (PeerJS/WebRTC).
- *  • Menu ⚙ → "Multijogador": quem CRIA a sala escolhe o máximo de jogadores (2–8) · Entrar (cola o código) · Sair.
+ *  • Menu ⚙ → "Multijogador": quem CRIA a sala escolhe o máximo de jogadores (2–8) e o TIPO: Privada (só entra com o código)
+ *    ou Aberta (aparece na lista; pode ter um nome) · "Buscar salas abertas" lista as salas abertas (P2P, sem servidor de lista) · Entrar (cola o código) · Sair.
  *  • Link da sala: quem criou toca em "Compartilhar link" (menu nativo de compartilhar no celular, ou copia) e o jogo abre com ?sala=CODIGO;
  *    quem abre o link entra direto na sala, sem digitar o código.
  *  • Pode entrar gente com a partida já rolando, até o limite; sala cheia recusa quem tentar entrar.
@@ -29,11 +30,11 @@
   const h = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
   const arr = v => [+v.x.toFixed(3), +v.y.toFixed(3), +v.z.toFixed(3)];
   const vec = a => new THREE.Vector3(a[0], a[1], a[2]);
-  const LS = 'tiroatiro-maxplayers';
+  const LS = 'tiroatiro-maxplayers', LS_TYPE = 'tiroatiro-roomopen';
   const loadMax = () => { try { const n = +localStorage.getItem(LS); return n >= MIN_PLAYERS && n <= MAX_PLAYERS ? n : DEFAULT_PLAYERS; } catch (_) { return DEFAULT_PLAYERS; } };
 
   const Multiplayer = {
-    name: 'multiplayer', active: false, tpFlag: false, idx: 0, seed: 0, dead: false, respawnT: 0, sendT: 0, maxSel: loadMax(), ui: {},
+    name: 'multiplayer', active: false, tpFlag: false, idx: 0, seed: 0, dead: false, respawnT: 0, sendT: 0, maxSel: loadMax(), openSel: false, scanning: false, ui: {},
 
     init() {
       this.buildMenuSection(); this.buildHud();
@@ -50,7 +51,8 @@
     count() { return 1 + Object.keys(Model.remotes).length; },
     infoMsg() {
       if (!this.active) return 'Conectado! Entrando na partida…';
-      return `Você é o jogador ${COLOR_NAMES[this.idx % COLORS.length]}. Jogadores na sala: ${this.count()}/${Network.max}.`;
+      const kind = Network.role === 'host' ? (Network.open ? ' (sala aberta)' : ' (sala privada)') : '';
+      return `Você é o jogador ${COLOR_NAMES[this.idx % COLORS.length]}. Jogadores na sala: ${this.count()}/${Network.max}${kind}.`;
     },
 
     // ---------- UI: seção dentro do menu de configurações ----------
@@ -64,6 +66,16 @@
         try { localStorage.setItem(LS, this.maxSel); } catch (_) {}
       };
       minus.onclick = () => setMax(-1); plus.onclick = () => setMax(+1);
+      // tipo da sala: privada (código) ou aberta (aparece na busca)
+      try { this.openSel = localStorage.getItem(LS_TYPE) === '1'; } catch (_) {}
+      const typeRow = h('div', 'row'), bPriv = h('button', 'seg', 'Privada'), bOpen = h('button', 'seg', 'Aberta');
+      typeRow.append(h('span', 'lbl', 'Tipo de sala'), bPriv, bOpen);
+      const nameInp = h('input', 'mp-name'); nameInp.placeholder = 'Nome da sala (opcional)'; nameInp.maxLength = 18; nameInp.autocomplete = 'off'; nameInp.spellcheck = false;
+      const setType = o => {
+        this.openSel = o; bPriv.classList.toggle('on', !o); bOpen.classList.toggle('on', o); nameInp.style.display = o ? '' : 'none';
+        try { localStorage.setItem(LS_TYPE, o ? '1' : '0'); } catch (_) {}
+      };
+      bPriv.onclick = () => setType(false); bOpen.onclick = () => setType(true); setType(this.openSel);
       const create = h('button', null, 'Criar sala');
       const codeBox = h('div', 'mp-code'), codeTxt = h('b'), copy = h('button', null, 'Copiar');
       codeBox.append(h('span', null, 'Código da sala:'), codeTxt, copy);
@@ -72,9 +84,12 @@
       inp.placeholder = 'Cole o código da sala'; inp.autocomplete = 'off'; inp.spellcheck = false; inp.maxLength = 24;
       joinRow.append(inp, join);
       const leave = h('button', null, 'Sair da sala');
-      sec.append(h('h3', null, 'Multijogador'), status, maxRow, create, codeBox, share, joinRow, leave);
+      // busca de salas abertas
+      const scan = h('button', null, 'Buscar salas abertas'), list = h('div', 'mp-list');
+      sec.append(h('h3', null, 'Multijogador'), status, maxRow, typeRow, nameInp, create, codeBox, share, scan, list, joinRow, leave);
       Menu.ui.panel.insertBefore(sec, Menu.ui.actions);
-      create.onclick = () => Network.createRoom(this.maxSel);
+      create.onclick = () => Network.createRoom(this.maxSel, this.openSel, nameInp.value);
+      scan.onclick = () => this.scanRooms();
       join.onclick = () => Network.join(inp.value);
       inp.addEventListener('keydown', e => { if (e.key === 'Enter') Network.join(inp.value); });
       leave.onclick = () => Network.leave();
@@ -90,16 +105,36 @@
         catch (_) { const r = document.createRange(); r.selectNodeContents(codeTxt); getSelection().removeAllRanges(); getSelection().addRange(r); copy.textContent = 'Selecionado'; }
         setTimeout(() => copy.textContent = 'Copiar', 1500);
       };
-      Object.assign(this.ui, { sec, status, maxRow, create, codeBox, codeTxt, share, joinRow, leave, inp, join });
+      Object.assign(this.ui, { sec, status, maxRow, typeRow, nameInp, scan, list, create, codeBox, codeTxt, share, joinRow, leave, inp, join });
       this.refreshUi({ status: 'offline' });
     },
     refreshUi(s) {
       const u = this.ui, st = s.status, idle = st === 'offline';
-      u.create.style.display = u.joinRow.style.display = u.maxRow.style.display = idle ? '' : 'none';
+      u.create.style.display = u.joinRow.style.display = u.maxRow.style.display = u.typeRow.style.display = u.scan.style.display = u.list.style.display = idle ? '' : 'none';
+      u.nameInp.style.display = idle && this.openSel ? '' : 'none';
+      if (!idle) u.list.replaceChildren(); // some a lista antiga ao entrar/criar sala
       u.codeBox.style.display = u.share.style.display = (st === 'waiting' || st === 'connected') && Network.role === 'host' ? '' : 'none';
       u.leave.style.display = idle ? 'none' : '';
       if (s.msg) u.status.textContent = s.msg;
       u.codeTxt.textContent = Network.code;
+    },
+    /** Procura salas abertas (P2P) e mostra a lista com botão Entrar. */
+    scanRooms() {
+      const u = this.ui; if (this.scanning) return; this.scanning = true;
+      u.scan.disabled = true; u.scan.textContent = 'Buscando…'; u.list.replaceChildren(h('p', 'mp-empty', 'Procurando salas abertas…'));
+      Network.scan().then(rooms => this.renderRooms(rooms))
+        .catch(e => u.list.replaceChildren(h('p', 'mp-empty', e.message)))
+        .finally(() => { this.scanning = false; u.scan.disabled = false; u.scan.textContent = 'Buscar salas abertas'; });
+    },
+    renderRooms(rooms) {
+      const list = this.ui.list; list.replaceChildren();
+      if (!rooms.length) { list.append(h('p', 'mp-empty', 'Nenhuma sala aberta agora. Crie a sua!')); return; }
+      rooms.forEach(r => {
+        const row = h('div', 'mp-room'), info = h('div', 'mp-info'), full = r.max > 0 && r.players >= r.max;
+        info.append(h('b', null, r.name), h('span', null, `${r.players}/${r.max} jogadores${full ? ' · cheia' : ''}`));
+        const go = h('button', null, 'Entrar'); go.disabled = full; go.onclick = () => Network.join(r.code);
+        row.append(info, go); list.append(row);
+      });
     },
     onStatus(s) {
       if (s.status === 'connected') { s.msg = this.infoMsg(); this.autoJoin = false; }

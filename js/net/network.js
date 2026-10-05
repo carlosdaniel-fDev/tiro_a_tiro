@@ -3,7 +3,10 @@
  * Topologia em ESTRELA: todo convidado conecta só ao anfitrião, e o anfitrião retransmite as
  * mensagens de jogo (state/shot/dead) aos demais. Só cuida da conexão; não conhece regras do
  * jogo (isso é features/multiplayer.js).
- *   Network.createRoom(max)  cria sala (anfitrião) com limite de jogadores → código de 5 caracteres (Network.code)
+ *   Network.createRoom(max, aberta, nome)  cria sala (anfitrião) com limite de jogadores.
+ *       PRIVADA (padrão): código aleatório de 5 caracteres, só entra quem tem o código.
+ *       ABERTA: ocupa a primeira vaga livre PUB-01…PUB-16 (id fixo e conhecido) e aparece na lista de quem buscar.
+ *   Network.scan()           Promise → lista de salas abertas [{code,name,players,max}] (sem servidor de lista, veja abaixo)
  *   Network.join(codigo)     entra na sala colando o código (convidado)
  *   Network.send(obj, except) envia JSON: convidado → anfitrião · anfitrião → todos (menos o id "except")
  *   Network.sendTo(id, obj)  (anfitrião) envia a um convidado só
@@ -14,6 +17,9 @@
  *   net:join {id} (anfitrião: entrou um jogador) · net:left {id} (anfitrião: um jogador saiu) ·
  *   net:data (msg) · net:close (a sala acabou / você saiu)
  * status: offline | creating | waiting | joining | connected
+ * BUSCA DE SALAS ABERTAS sem servidor próprio: as salas abertas usam ids fixos (tiroatiro-PUB-01…16). Quem busca
+ * "bate na porta" de cada id com uma conexão de sondagem (metadata.probe); se há anfitrião, ele responde {t:'info'} com
+ * nome/jogadores/máximo e a sondagem não conta como jogador. Id sem dono = "peer-unavailable" = vaga livre.
  * O PeerJS usa o servidor público de sinalização (0.peerjs.com) só para o "aperto de mãos";
  * depois os dados vão direto entre os jogadores. Requer internet.
  * Depende de: bus, Peer (js/vendor/peerjs.min.js) · Exporta: FPS.Network
@@ -22,30 +28,78 @@
   'use strict';
   const { bus } = FPS;
   const PREFIX = 'tiroatiro-', ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // sem O/0/I/1
+  const SLOTS = 16, slotCode = n => 'PUB-' + String(n).padStart(2, '0'); // salas abertas (o '-' nunca aparece em código privado)
   const RELAY = ['state', 'shot', 'dead'];                                      // só estas mensagens de convidado são retransmitidas
   const rand = () => Array.from({ length: 5 }, () => ALPHABET[Math.random() * ALPHABET.length | 0]).join('');
   const ERRORS = {
     'peer-unavailable': 'Sala não encontrada. Confira o código.', network: 'Sem conexão com o servidor.',
     'server-error': 'Servidor indisponível.', timeout: 'Tempo esgotado ao conectar.',
-    'browser-incompatible': 'Navegador sem suporte a WebRTC.', full: 'A sala está cheia.'
+    'browser-incompatible': 'Navegador sem suporte a WebRTC.', full: 'A sala está cheia.',
+    'no-slot': 'Todas as vagas de salas abertas estão ocupadas. Crie uma sala privada.'
   };
 
   const Network = {
-    peer: null, conns: {}, role: null, code: '', status: 'offline', timer: 0, max: 2,
+    peer: null, conns: {}, role: null, code: '', status: 'offline', timer: 0, max: 2, open: false, name: '',
     get connected() { return Object.values(this.conns).some(c => c && c.open); },
     /** Quantos convidados estão conectados (só faz sentido para o anfitrião). */
     get guests() { return Object.keys(this.conns).length; },
 
     setStatus(status, msg) { this.status = status; bus.emit('net:status', { status, msg, code: this.code, role: this.role }); },
 
-    /** Anfitrião: registra um id "tiroatiro-XXXXX" no PeerJS e espera os convidados (até max jogadores no total). */
-    createRoom(max) { this.leave(true); this.role = 'host'; this.max = Math.max(2, max | 0 || 2); this._open(rand()); },
-    _open(code) {
+    /** Anfitrião: registra um id "tiroatiro-XXXXX" no PeerJS e espera os convidados (até max jogadores no total).
+     *  aberta=true → sala pública (id PUB-nn, listada na busca) · aberta=false → privada (código aleatório). */
+    createRoom(max, aberta, nome) {
+      this.leave(true); this.role = 'host'; this.max = Math.max(2, max | 0 || 2);
+      this.open = !!aberta; this.name = String(nome || '').trim().slice(0, 18);
+      if (this.open) this._openPublic(1); else this._open(rand());
+    },
+    /** Sala aberta: tenta a vaga n; se já tem dono (unavailable-id), tenta a próxima. */
+    _openPublic(n) { if (n > SLOTS) { this._fail({ type: 'no-slot' }); return; } this._open(slotCode(n), () => this._openPublic(n + 1)); },
+    _open(code, retry) {
       this.code = code; this.setStatus('creating', 'Criando sala…');
       const peer = this.peer = new Peer(PREFIX + code, { debug: 0 });
-      peer.on('open', () => this.setStatus('waiting', 'Sala criada. Envie o código aos outros jogadores.'));
-      peer.on('connection', c => { if (c.open) this._hostAccept(c); else c.on('open', () => this._hostAccept(c)); });
-      peer.on('error', e => { if (e.type === 'unavailable-id') { peer.destroy(); this._open(rand()); return; } this._fail(e); });
+      peer.on('open', () => this.setStatus('waiting', this.open ? 'Sala aberta criada. Ela já aparece na busca dos outros jogadores.' : 'Sala privada criada. Envie o código aos outros jogadores.'));
+      peer.on('connection', c => {
+        if (c.metadata && c.metadata.probe) { this._hostProbe(c); return; } // alguém só espiando a lista de salas
+        if (c.open) this._hostAccept(c); else c.on('open', () => this._hostAccept(c));
+      });
+      peer.on('error', e => { if (e.type === 'unavailable-id') { peer.destroy(); retry ? retry() : this._open(rand()); return; } this._fail(e); });
+    },
+    /** Anfitrião: responde a uma sondagem da busca com os dados da sala e fecha (não conta como jogador). */
+    _hostProbe(c) {
+      const reply = () => {
+        if (this.open) this._tx(c, { t: 'info', name: this.name || 'Sala aberta', n: this.guests + 1, max: this.max });
+        setTimeout(() => { try { c.close(); } catch (_) {} }, 600);
+      };
+      if (c.open) reply(); else c.on('open', reply);
+    },
+    /** Busca salas abertas: sonda PUB-01…PUB-16 e devolve (Promise) as que responderam. Não mexe na sala atual. */
+    scan() {
+      return new Promise((resolve, reject) => {
+        const found = [], pending = new Set(); let peer = null, done = false, timer = 0;
+        const finish = err => {
+          if (done) return; done = true; clearTimeout(timer); try { peer && peer.destroy(); } catch (_) {}
+          if (err) reject(new Error(ERRORS[err.type] || 'Não foi possível buscar salas.')); else resolve(found.sort((a, b) => a.code < b.code ? -1 : 1));
+        };
+        const settle = code => { pending.delete(code); if (!pending.size) finish(); };
+        timer = setTimeout(() => finish(), 6000);
+        try { peer = new Peer({ debug: 0 }); } catch (e) { finish({ type: 'browser-incompatible' }); return; }
+        peer.on('error', e => {
+          const m = /tiroatiro-(PUB-\d+)/.exec(e.message || '');
+          if (e.type === 'peer-unavailable' && m) settle(m[1]); else finish(e); // vaga sem anfitrião = normal; outro erro = falha de rede
+        });
+        peer.on('open', () => {
+          for (let n = 1; n <= SLOTS; n++) {
+            const code = slotCode(n); pending.add(code);
+            const c = peer.connect(PREFIX + code, { reliable: true, serialization: 'json', metadata: { probe: 1 } });
+            c.on('data', d => {
+              if (d && d.t === 'info') found.push({ code, name: String(d.name || 'Sala aberta').slice(0, 18), players: d.n | 0, max: d.max | 0 });
+              settle(code); try { c.close(); } catch (_) {}
+            });
+            c.on('error', () => settle(code)); c.on('close', () => settle(code));
+          }
+        });
+      });
     },
     /** Anfitrião: aceita um convidado (se houver vaga), dá um id a ele e retransmite o que ele enviar. */
     _hostAccept(c) {

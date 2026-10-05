@@ -13,7 +13,7 @@ O jogo possui modo single-player e multiplayer P2P com salas de **2 a 8 jogadore
 - 🎯 FPS 3D com tiro hitscan.
 - 🌐 Multiplayer P2P utilizando PeerJS/WebRTC.
 - 👥 Partidas de 2 a 8 jogadores.
-- 🏠 Sistema de criação e entrada em salas por código.
+- 🏠 Salas **privadas** (por código) e **abertas** (listadas na busca), tudo P2P.
 - 🎨 Cores diferentes para cada jogador e suas balas.
 - 🔫 Sistema de pistola e munição limitada.
 - 💥 Sistema de dano e acerto.
@@ -58,6 +58,8 @@ O modo multiplayer utiliza **PeerJS/WebRTC** e precisa de internet para estabele
 
 A comunicação do jogo é P2P, enquanto o servidor público do PeerJS é utilizado para o processo inicial de conexão.
 
+A **busca de salas abertas não usa servidor de lista**: cada sala aberta ocupa um id fixo (`PUB-01`…`PUB-16`) e a busca "bate na porta" de cada um; quem é anfitrião responde com nome e número de jogadores.
+
 ---
 
 # 🎮 Controles
@@ -99,14 +101,18 @@ O jogo foi desenvolvido para funcionar em **modo paisagem**.
 
 | Ação | Controle |
 |---|---|
-| Mover | Analógico esquerdo |
-| Olhar | Arrastar no lado direito |
-| Atirar | Botão ATIRAR |
+| Mover | Analógico esquerdo (flutuante) |
+| Olhar | Arrastar no lado direito (ou arrastar em cima do botão ATIRAR) |
+| Atirar | Botão ATIRAR (segurar) |
 | Pular | Botão PULAR |
-| Agachar | Botão AGACHAR |
-| Recarregar | Botão RECARREGAR |
+| Correr | Botão CORRER (toque; desliga ao soltar o analógico) |
+| Agachar | Botão AGACHAR (toque liga/desliga) |
+| Inclinar | Botões ◀ INCL. / INCL. ▶ (segurar) |
+| Recarregar | Botão RECARGA |
+| Configurações | Botão ⚙ no canto superior direito |
 
-O agachamento no celular funciona por toque para ligar/desligar.
+Todos os botões seguem o próprio dedo: escorregar para fora do botão não solta a ação, e vários dedos funcionam ao mesmo tempo.
+Para testar o modo celular no computador, abra o jogo com `?mobile` no fim do endereço (e `?desktop` para forçar o modo PC).
 
 ---
 
@@ -295,9 +301,12 @@ Na tela inicial:
 
 O criador escolhe o limite da partida entre **2 e 8 jogadores**.
 
-Depois de criar a sala, o jogo gera um código de aproximadamente cinco caracteres.
+Antes de criar, escolha o **tipo da sala**:
 
-O jogador pode utilizar **Copiar** e enviar o código para os outros jogadores.
+- **Privada** (padrão): o jogo gera um código de cinco caracteres e só entra quem tiver o código (ou o link). Use **Copiar** ou **Compartilhar link**.
+- **Aberta**: a sala aparece na lista de quem tocar em **Buscar salas abertas**. Dá para dar um nome à sala (opcional). O código (`PUB-01`…`PUB-16`) também pode ser compartilhado.
+
+Existem 16 vagas de salas abertas ao mesmo tempo. Se todas estiverem ocupadas, o jogo avisa para criar uma sala privada.
 
 ---
 
@@ -307,10 +316,14 @@ Os outros jogadores acessam:
 
 **MULTIJOGADOR**
 
-Depois:
+Depois, escolhem um caminho:
 
-1. Colam o código da sala.
-2. Selecionam **Entrar**.
+- **Sala aberta:** tocam em **Buscar salas abertas** e em **Entrar** na sala desejada (a lista mostra nome e jogadores, ex.: 2/4).
+- **Sala privada:** colam o código da sala.
+
+Então:
+
+1. Selecionam **Entrar**.
 3. A conexão é estabelecida.
 4. O jogador entra na partida.
 
