@@ -1,7 +1,8 @@
 /**
  * FEATURE: Multiplayer — partida em tempo real com VÁRIOS jogadores (PeerJS/WebRTC).
- *  • Menu ⚙ → "Multijogador": quem CRIA a sala escolhe o máximo de jogadores (2–8) e o TIPO: Privada (só entra com o código)
- *    ou Aberta (aparece na lista; pode ter um nome) · "Buscar salas abertas" lista as salas abertas (P2P, sem servidor de lista) · Entrar (cola o código) · Sair.
+ *  • Tela inicial → BUSCAR SALAS: janela central com a lista de salas abertas (P2P, sem servidor de lista) e campo para entrar por código.
+ *    Tela inicial → CRIAR SALA: janela central onde se escolhe o máximo de jogadores (2–8), o TIPO (Privada = só com código · Aberta = aparece na lista) e um nome.
+ *    Depois de criada, a janela mostra o código/link; o menu ⚙ também traz código, link e "Sair da sala".
  *  • Link da sala: quem criou toca em "Compartilhar link" (menu nativo de compartilhar no celular, ou copia) e o jogo abre com ?sala=CODIGO;
  *    quem abre o link entra direto na sala, sem digitar o código.
  *  • Pode entrar gente com a partida já rolando, até o limite; sala cheia recusa quem tentar entrar.
@@ -34,10 +35,10 @@
   const loadMax = () => { try { const n = +localStorage.getItem(LS); return n >= MIN_PLAYERS && n <= MAX_PLAYERS ? n : DEFAULT_PLAYERS; } catch (_) { return DEFAULT_PLAYERS; } };
 
   const Multiplayer = {
-    name: 'multiplayer', active: false, tpFlag: false, idx: 0, seed: 0, dead: false, respawnT: 0, sendT: 0, maxSel: loadMax(), openSel: false, scanning: false, ui: {},
+    name: 'multiplayer', active: false, tpFlag: false, idx: 0, seed: 0, dead: false, respawnT: 0, sendT: 0, maxSel: loadMax(), openSel: false, scanning: false, lobbyOpen: false, mode: 'search', ui: {},
 
     init() {
-      this.buildMenuSection(); this.buildHud();
+      this.buildLobby(); this.buildMenuSection(); this.buildHud();
       this.autoJoinFromLink();
       bus.on('net:status', s => this.onStatus(s));
       bus.on('net:join', e => this.onJoin(e.id));
@@ -55,44 +56,12 @@
       return `Você é o jogador ${COLOR_NAMES[this.idx % COLORS.length]}. Jogadores na sala: ${this.count()}/${Network.max}${kind}.`;
     },
 
-    // ---------- UI: seção dentro do menu de configurações ----------
-    buildMenuSection() {
-      const sec = h('div', 'mp'), status = h('p', 'mp-status', 'Offline — crie uma sala ou entre com um código.');
-      // limite de jogadores (só quem cria a sala define)
-      const maxRow = h('div', 'row'), minus = h('button', 'step', '−'), plus = h('button', 'step', '+'), val = h('span', 'val', String(this.maxSel));
-      maxRow.append(h('span', 'lbl', 'Máx. de jogadores'), minus, val, plus);
-      const setMax = d => {
-        this.maxSel = Math.max(MIN_PLAYERS, Math.min(MAX_PLAYERS, this.maxSel + d)); val.textContent = this.maxSel;
-        try { localStorage.setItem(LS, this.maxSel); } catch (_) {}
-      };
-      minus.onclick = () => setMax(-1); plus.onclick = () => setMax(+1);
-      // tipo da sala: privada (código) ou aberta (aparece na busca)
-      try { this.openSel = localStorage.getItem(LS_TYPE) === '1'; } catch (_) {}
-      const typeRow = h('div', 'row'), bPriv = h('button', 'seg', 'Privada'), bOpen = h('button', 'seg', 'Aberta');
-      typeRow.append(h('span', 'lbl', 'Tipo de sala'), bPriv, bOpen);
-      const nameInp = h('input', 'mp-name'); nameInp.placeholder = 'Nome da sala (opcional)'; nameInp.maxLength = 18; nameInp.autocomplete = 'off'; nameInp.spellcheck = false;
-      const setType = o => {
-        this.openSel = o; bPriv.classList.toggle('on', !o); bOpen.classList.toggle('on', o); nameInp.style.display = o ? '' : 'none';
-        try { localStorage.setItem(LS_TYPE, o ? '1' : '0'); } catch (_) {}
-      };
-      bPriv.onclick = () => setType(false); bOpen.onclick = () => setType(true); setType(this.openSel);
-      const create = h('button', null, 'Criar sala');
+    // ---------- UI: LOBBY (janela central: Buscar salas / Criar sala / Sala) + resumo no menu ⚙ ----------
+    /** Controles da sala (código, copiar, compartilhar link, sair) — criados para o lobby e para o menu ⚙. */
+    roomControls() {
       const codeBox = h('div', 'mp-code'), codeTxt = h('b'), copy = h('button', null, 'Copiar');
       codeBox.append(h('span', null, 'Código da sala:'), codeTxt, copy);
-      const share = h('button', null, 'Compartilhar link');
-      const joinRow = h('div', 'mp-join'), inp = h('input'), join = h('button', null, 'Entrar');
-      inp.placeholder = 'Cole o código da sala'; inp.autocomplete = 'off'; inp.spellcheck = false; inp.maxLength = 24;
-      joinRow.append(inp, join);
-      const leave = h('button', null, 'Sair da sala');
-      // busca de salas abertas
-      const scan = h('button', null, 'Buscar salas abertas'), list = h('div', 'mp-list');
-      sec.append(h('h3', null, 'Multijogador'), status, maxRow, typeRow, nameInp, create, codeBox, share, scan, list, joinRow, leave);
-      Menu.ui.panel.insertBefore(sec, Menu.ui.actions);
-      create.onclick = () => Network.createRoom(this.maxSel, this.openSel, nameInp.value);
-      scan.onclick = () => this.scanRooms();
-      join.onclick = () => Network.join(inp.value);
-      inp.addEventListener('keydown', e => { if (e.key === 'Enter') Network.join(inp.value); });
-      leave.onclick = () => Network.leave();
+      const share = h('button', null, 'Compartilhar link'), leave = h('button', 'danger', 'Sair da sala');
       share.onclick = async () => {
         const url = this.roomLink(), text = `Entra na minha sala do Tiro a Tiro! Código: ${Network.code}`;
         if (navigator.share) { try { await navigator.share({ title: 'Tiro a Tiro', text, url }); return; } catch (e) { if (e && e.name === 'AbortError') return; } }
@@ -105,32 +74,101 @@
         catch (_) { const r = document.createRange(); r.selectNodeContents(codeTxt); getSelection().removeAllRanges(); getSelection().addRange(r); copy.textContent = 'Selecionado'; }
         setTimeout(() => copy.textContent = 'Copiar', 1500);
       };
-      Object.assign(this.ui, { sec, status, maxRow, typeRow, nameInp, scan, list, create, codeBox, codeTxt, share, joinRow, leave, inp, join });
-      this.refreshUi({ status: 'offline' });
+      leave.onclick = () => Network.leave();
+      return { codeBox, codeTxt, share, leave };
     },
+    buildLobby() {
+      try { this.openSel = localStorage.getItem(LS_TYPE) === '1'; } catch (_) {}
+      const root = h('div'), box = h('div', 'lb-box'); root.id = 'lobby'; root.appendChild(box);
+      const title = h('h2'), status = h('p', 'lb-status');
+
+      // --- visão "Buscar salas": lista de salas abertas + entrar por código ---
+      const vSearch = h('div', 'lb-view'), list = h('div', 'lb-list'), refresh = h('button', null, 'Atualizar lista');
+      const joinRow = h('div', 'lb-join'), inp = h('input'), join = h('button', 'primary', 'Entrar');
+      inp.placeholder = 'Código da sala privada'; inp.autocomplete = 'off'; inp.spellcheck = false; inp.maxLength = 24;
+      joinRow.append(inp, join);
+      vSearch.append(h('h3', null, 'Salas abertas'), list, refresh, h('h3', null, 'Sala privada'), joinRow);
+
+      // --- visão "Criar sala": máximo de jogadores, tipo e nome ---
+      const vCreate = h('div', 'lb-view');
+      const maxRow = h('div', 'lb-row'), minus = h('button', 'step', '−'), plus = h('button', 'step', '+'), val = h('span', 'val', String(this.maxSel));
+      maxRow.append(h('span', 'lbl', 'Máx. de jogadores'), minus, val, plus);
+      const setMax = d => { this.maxSel = Math.max(MIN_PLAYERS, Math.min(MAX_PLAYERS, this.maxSel + d)); val.textContent = this.maxSel; try { localStorage.setItem(LS, this.maxSel); } catch (_) {} };
+      minus.onclick = () => setMax(-1); plus.onclick = () => setMax(+1);
+      const types = h('div', 'lb-types'), bPriv = h('button', 'seg', 'Privada'), bOpen = h('button', 'seg', 'Aberta'), desc = h('p', 'lb-desc');
+      types.append(bPriv, bOpen);
+      const nameInp = h('input', 'lb-name'); nameInp.placeholder = 'Nome da sala (opcional)'; nameInp.maxLength = 18; nameInp.autocomplete = 'off'; nameInp.spellcheck = false;
+      const setType = o => {
+        this.openSel = o; bPriv.classList.toggle('on', !o); bOpen.classList.toggle('on', o); nameInp.style.display = o ? '' : 'none';
+        desc.textContent = o ? 'Aparece na lista de “Buscar salas”. Qualquer jogador pode entrar.' : 'Não aparece na lista. Só entra quem tiver o código ou o link.';
+        try { localStorage.setItem(LS_TYPE, o ? '1' : '0'); } catch (_) {}
+      };
+      bPriv.onclick = () => setType(false); bOpen.onclick = () => setType(true); setType(this.openSel);
+      const create = h('button', 'primary', 'Criar sala');
+      vCreate.append(maxRow, h('h3', null, 'Tipo de sala'), types, desc, nameInp, create);
+
+      // --- visão "Sala": código e link (anfitrião) ou só "Entrando…" (convidado) ---
+      const vRoom = h('div', 'lb-view'), rc = this.roomControls();
+      vRoom.append(rc.codeBox, rc.share, rc.leave);
+
+      const back = h('button', null, 'Voltar');
+      box.append(title, status, vSearch, vCreate, vRoom, back);
+      document.body.appendChild(root);
+
+      back.onclick = () => this.closeLobby();
+      refresh.onclick = () => this.scanRooms();
+      create.onclick = () => Network.createRoom(this.maxSel, this.openSel, nameInp.value);
+      join.onclick = () => Network.join(inp.value);
+      inp.addEventListener('keydown', e => { if (e.key === 'Enter') Network.join(inp.value); });
+      root.addEventListener('mousedown', e => { if (e.target === root && Network.status === 'offline') this.closeLobby(); }); // clicar fora fecha
+      addEventListener('keydown', e => { if (e.code === 'Escape' && this.lobbyOpen && Network.status === 'offline') this.closeLobby(); });
+      Object.assign(this.ui, { lobby: root, lbTitle: title, lbStatus: status, vSearch, vCreate, vRoom, list, refresh, inp, back, lbCode: rc });
+    },
+    /** Abre a janela central: mode = 'search' (Buscar salas) ou 'create' (Criar sala). */
+    openLobby(mode) {
+      this.mode = mode === 'create' ? 'create' : 'search'; this.lobbyOpen = true;
+      this.ui.lobby.classList.add('open'); this.ui.lbStatus.textContent = '';
+      this.refreshUi({ status: Network.status });
+      if (Network.status === 'offline' && this.mode === 'search') this.scanRooms();
+    },
+    closeLobby() { this.lobbyOpen = false; this.ui.lobby.classList.remove('open'); },
+    buildMenuSection() {
+      const sec = h('div', 'mp'), status = h('p', 'mp-status', 'Para jogar online use BUSCAR SALAS ou CRIAR SALA na tela inicial.'), rc = this.roomControls();
+      sec.append(h('h3', null, 'Multijogador'), status, rc.codeBox, rc.share, rc.leave);
+      Menu.ui.panel.insertBefore(sec, Menu.ui.actions);
+      Object.assign(this.ui, { sec, status, mnCode: rc });
+    },
+    /** Atualiza lobby e menu ⚙ conforme o estado da conexão. */
     refreshUi(s) {
-      const u = this.ui, st = s.status, idle = st === 'offline';
-      u.create.style.display = u.joinRow.style.display = u.maxRow.style.display = u.typeRow.style.display = u.scan.style.display = u.list.style.display = idle ? '' : 'none';
-      u.nameInp.style.display = idle && this.openSel ? '' : 'none';
+      const u = this.ui, st = s.status, idle = st === 'offline', host = Network.role === 'host', hosting = host && (st === 'waiting' || st === 'connected');
+      if (s.msg) { u.status.textContent = s.msg; u.lbStatus.textContent = s.msg; }
+      for (const rc of [u.lbCode, u.mnCode]) {
+        rc.codeBox.style.display = rc.share.style.display = hosting ? '' : 'none';
+        rc.leave.style.display = idle ? 'none' : ''; rc.codeTxt.textContent = Network.code;
+      }
+      // lobby: a visão depende do estado
+      const view = idle ? this.mode : 'room';
+      u.vSearch.style.display = view === 'search' ? '' : 'none';
+      u.vCreate.style.display = view === 'create' ? '' : 'none';
+      u.vRoom.style.display = view === 'room' ? '' : 'none';
+      u.back.style.display = idle ? '' : 'none';
+      u.lbTitle.textContent = idle ? (this.mode === 'create' ? 'Criar sala' : 'Buscar salas')
+        : host ? (Network.open ? 'Sala aberta' : 'Sala privada') : 'Entrando na sala…';
       if (!idle) u.list.replaceChildren(); // some a lista antiga ao entrar/criar sala
-      u.codeBox.style.display = u.share.style.display = (st === 'waiting' || st === 'connected') && Network.role === 'host' ? '' : 'none';
-      u.leave.style.display = idle ? 'none' : '';
-      if (s.msg) u.status.textContent = s.msg;
-      u.codeTxt.textContent = Network.code;
     },
     /** Procura salas abertas (P2P) e mostra a lista com botão Entrar. */
     scanRooms() {
       const u = this.ui; if (this.scanning) return; this.scanning = true;
-      u.scan.disabled = true; u.scan.textContent = 'Buscando…'; u.list.replaceChildren(h('p', 'mp-empty', 'Procurando salas abertas…'));
+      u.refresh.disabled = true; u.refresh.textContent = 'Buscando…'; u.list.replaceChildren(h('p', 'lb-empty', 'Procurando salas abertas…'));
       Network.scan().then(rooms => this.renderRooms(rooms))
-        .catch(e => u.list.replaceChildren(h('p', 'mp-empty', e.message)))
-        .finally(() => { this.scanning = false; u.scan.disabled = false; u.scan.textContent = 'Buscar salas abertas'; });
+        .catch(e => u.list.replaceChildren(h('p', 'lb-empty', e.message)))
+        .finally(() => { this.scanning = false; u.refresh.disabled = false; u.refresh.textContent = 'Atualizar lista'; });
     },
     renderRooms(rooms) {
       const list = this.ui.list; list.replaceChildren();
-      if (!rooms.length) { list.append(h('p', 'mp-empty', 'Nenhuma sala aberta agora. Crie a sua!')); return; }
+      if (!rooms.length) { list.append(h('p', 'lb-empty', 'Nenhuma sala aberta agora. Crie a sua!')); return; }
       rooms.forEach(r => {
-        const row = h('div', 'mp-room'), info = h('div', 'mp-info'), full = r.max > 0 && r.players >= r.max;
+        const row = h('div', 'lb-room'), info = h('div', 'lb-info'), full = r.max > 0 && r.players >= r.max;
         info.append(h('b', null, r.name), h('span', null, `${r.players}/${r.max} jogadores${full ? ' · cheia' : ''}`));
         const go = h('button', null, 'Entrar'); go.disabled = full; go.onclick = () => Network.join(r.code);
         row.append(info, go); list.append(row);
@@ -138,7 +176,7 @@
     },
     onStatus(s) {
       if (s.status === 'connected') { s.msg = this.infoMsg(); this.autoJoin = false; }
-      else if (s.status === 'offline' && this.autoJoin) { this.autoJoin = false; Menu.open(true); } // falhou ao entrar pelo link: abre o menu para mostrar o motivo
+      else if (s.status === 'offline' && this.autoJoin) { this.autoJoin = false; this.openLobby('search'); } // falhou ao entrar pelo link: abre o lobby para mostrar o motivo
       this.refreshUi(s);
     },
     /** Atualiza a mensagem do menu e o HUD quando entra/sai gente. */
@@ -160,8 +198,6 @@
       try { const u = new URL(location.href); u.searchParams.delete('sala'); u.searchParams.delete('room'); history.replaceState(null, '', u.pathname + u.search + u.hash); } catch (_) {} // não reentra ao recarregar
       setTimeout(() => Network.join(code), 400);
     },
-    /** Rola o menu até a seção (usado pelo botão MULTIJOGADOR da tela inicial). */
-    focus() { this.ui.sec.scrollIntoView({ block: 'center' }); },
 
     // ---------- HUD: barra de vida discreta (só do próprio jogador) ----------
     buildHud() {
@@ -203,7 +239,7 @@
     /** Mesmo mapa (semente), ponto de nascimento próprio e cor de bala do seu id. */
     startMatch(seed, idx) {
       this.idx = idx; this.active = true; this.dead = false; Input.resume('dead');
-      Menu.close();
+      Menu.close(); this.closeLobby();
       if (FPS.TitleScreen && FPS.TitleScreen.active) FPS.TitleScreen.play(false); // false: sem pointer lock (não há clique)
       View.clearAvatars(); Model.remotes = {};
       Model.generateWorld(seed); View.rebuildWorld(); Model.respawn(idx);

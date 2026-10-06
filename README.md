@@ -297,14 +297,14 @@ A comunicação ocorre principalmente de forma P2P.
 
 Na tela inicial:
 
-**MULTIJOGADOR → Máx. de jogadores → Criar sala**
+**CRIAR SALA** (abre uma janela no centro da tela)
 
-O criador escolhe o limite da partida entre **2 e 8 jogadores**.
+Nessa janela, o criador escolhe o limite da partida entre **2 e 8 jogadores**.
 
 Antes de criar, escolha o **tipo da sala**:
 
 - **Privada** (padrão): o jogo gera um código de cinco caracteres e só entra quem tiver o código (ou o link). Use **Copiar** ou **Compartilhar link**.
-- **Aberta**: a sala aparece na lista de quem tocar em **Buscar salas abertas**. Dá para dar um nome à sala (opcional). O código (`PUB-01`…`PUB-16`) também pode ser compartilhado.
+- **Aberta**: a sala aparece na lista de quem abrir **BUSCAR SALAS**. Dá para dar um nome à sala (opcional). O código (`PUB-01`…`PUB-16`) também pode ser compartilhado.
 
 Existem 16 vagas de salas abertas ao mesmo tempo. Se todas estiverem ocupadas, o jogo avisa para criar uma sala privada.
 
@@ -314,18 +314,17 @@ Existem 16 vagas de salas abertas ao mesmo tempo. Se todas estiverem ocupadas, o
 
 Os outros jogadores acessam:
 
-**MULTIJOGADOR**
+**BUSCAR SALAS** (abre uma janela no centro da tela)
 
-Depois, escolhem um caminho:
+A lista de salas abertas aparece sozinha (use **Atualizar lista** para buscar de novo). Depois, escolhem um caminho:
 
-- **Sala aberta:** tocam em **Buscar salas abertas** e em **Entrar** na sala desejada (a lista mostra nome e jogadores, ex.: 2/4).
-- **Sala privada:** colam o código da sala.
+- **Sala aberta:** tocam em **Entrar** na sala desejada (a lista mostra nome e jogadores, ex.: 2/4).
+- **Sala privada:** colam o código no campo **Sala privada** e tocam em **Entrar**.
 
 Então:
 
-1. Selecionam **Entrar**.
-3. A conexão é estabelecida.
-4. O jogador entra na partida.
+1. A conexão é estabelecida.
+2. O jogador entra na partida.
 
 Quando o primeiro jogador entra, a partida começa para todos.
 
@@ -571,14 +570,16 @@ A configuração é salva no navegador.
 
 Ao abrir o jogo, é exibida a tela inicial com:
 
-- **JOGAR**
+- **BUSCAR SALAS**
+- **CRIAR SALA**
+- **JOGAR SOLO**
 - **CONFIGURAÇÕES**
 - **COMO JOGAR**
 - **TELA CHEIA**
 
-Também é possível utilizar `Enter` para iniciar.
+Também é possível utilizar `Enter` para ativar o botão principal (**BUSCAR SALAS**).
 
-No computador, clicar em **JOGAR** captura o mouse.
+No computador, clicar em **JOGAR SOLO** (ou entrar em uma sala) captura o mouse.
 
 Durante a partida:
 

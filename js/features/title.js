@@ -1,7 +1,7 @@
 /**
  * FEATURE: TitleScreen — tela inicial do "Tiro a Tiro".
  * Mostra o nome do jogo sobre o mapa girando devagar e oferece:
- *   JOGAR · CONFIGURAÇÕES (abre o Menu) · COMO JOGAR · TELA CHEIA.
+ *   BUSCAR SALAS · CRIAR SALA (abrem a janela do Multiplayer) · JOGAR SOLO · CONFIGURAÇÕES (abre o Menu) · COMO JOGAR · TELA CHEIA.
  * Enquanto está ativa, pausa a entrada (Input.pause('title')) e esconde HUD/arma.
  * Para voltar a ela durante o jogo: FPS.TitleScreen.show() (botão "Menu principal").
  * Para REMOVER: apague .use(FPS.TitleScreen) em main.js (o jogo começa direto) —
@@ -31,9 +31,12 @@
 
     /** Monta a tela (DOM) e já a exibe. */
     init() {
-      const BUTTONS = [
-        { label: 'JOGAR', primary: true, on: () => this.play() },
-        { label: 'MULTIJOGADOR', on: () => { Menu.open(true); FPS.Multiplayer && FPS.Multiplayer.focus(); } },
+      const MP = FPS.Multiplayer, BUTTONS = [
+        ...(MP ? [
+          { label: 'BUSCAR SALAS', primary: true, on: () => MP.openLobby('search') },
+          { label: 'CRIAR SALA', on: () => MP.openLobby('create') },
+          { label: 'JOGAR SOLO', on: () => this.play() }
+        ] : [{ label: 'JOGAR', primary: true, on: () => this.play() }]),
         { label: 'CONFIGURAÇÕES', on: () => Menu.open(true) },
         { label: 'COMO JOGAR', on: () => this.showPanel('how') },
         { label: 'TELA CHEIA', on: () => this.toggleFullscreen() }
@@ -51,7 +54,7 @@
       root.append(main, how, h('div', 'tt-foot', 'feito por carlosdaniel-fDev · v1.0'));
       document.body.appendChild(root);
       Object.assign(this.ui, { root, main, how });
-      addEventListener('keydown', e => { if (this.active && !Menu.isOpen && e.code === 'Enter' && this.ui.main.style.display !== 'none') this.play(); });
+      addEventListener('keydown', e => { if (this.active && !Menu.isOpen && !(MP && MP.lobbyOpen) && e.code === 'Enter' && this.ui.main.style.display !== 'none') BUTTONS[0].on(); }); // Enter = botão principal
       this.show();
     },
 
